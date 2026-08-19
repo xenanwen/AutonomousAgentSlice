@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Autonomous Agent</title>
+  <!-- Empty inline icon: avoids a noisy 404 for /favicon.ico in the console. -->
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>Autonomous Agent</h1>
+      <p class="subtitle">Give the agent a goal. It plans, uses tools, and reports back.</p>
+    </header>
+
+    <!-- ---------- Goal form ---------- -->
+    <section class="card">
+      <form id="goal-form">
+        <label for="goal">What should the agent do?</label>
+        <input
+          id="goal"
+          name="goal"
+          type="text"
+          maxlength="2000"
+          placeholder="Research Python"
+          autocomplete="off"
+          required
+        />
+
+        <div class="row">
+          <label class="checkbox">
+            <input type="checkbox" id="force-failure" />
+            Force mock tool failure
+          </label>
+          <button type="submit" id="run-button">Run</button>
+        </div>
+
+        <p class="examples">
+          Try:
+          <button type="button" class="chip" data-goal="Research Python">Research Python</button>
+          <button type="button" class="chip" data-goal="Analyze the Python ecosystem">Analyze (4 steps)</button>
+          <button type="button" class="chip" data-goal="Research Python and fail_writer">Fail at last step</button>
+          <button type="button" class="chip" data-goal="Research Python and never finish">Exceed step limit</button>
+        </p>
+      </form>
+      <p id="form-error" class="form-error" hidden></p>
+    </section>
+
+    <!-- ---------- Run panel ---------- -->
+    <section class="card" id="run-panel" hidden>
+      <div class="run-header">
+        <div>
+          <div class="muted">Run ID</div>
+          <div id="run-id" class="mono"></div>
+        </div>
+        <div>
+          <div class="muted">Status</div>
+          <div id="run-status" class="status-badge"></div>
+        </div>
+        <div>
+          <div class="muted">Credits used</div>
+          <div id="run-credits" class="mono"></div>
+        </div>
+      </div>
+
+      <h2>Steps</h2>
+      <ul id="step-list" class="steps"></ul>
+
+      <!-- Success -->
+      <div id="result-block" hidden>
+        <h2>Final result</h2>
+        <pre id="result-output"></pre>
+      </div>
+
+      <!-- Failure -->
+      <div id="failure-block" class="failure" hidden>
+        <h2>Run failed</h2>
+        <p><strong>Reason:</strong> <span id="failure-reason"></span></p>
+        <p><strong>Credits used:</strong> <span id="failure-credits"></span></p>
+        <p><strong>Completed steps:</strong> <span id="failure-completed"></span></p>
+        <p class="muted small">
+          The failed run is kept for auditing. Retrying starts a brand new run.
+        </p>
+      </div>
+
+      <div class="row end">
+        <button type="button" id="replay-button" class="secondary" hidden>
+          Resend the same request (same Idempotency-Key)
+        </button>
+      </div>
+      <p id="replay-note" class="replay-note" hidden></p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
