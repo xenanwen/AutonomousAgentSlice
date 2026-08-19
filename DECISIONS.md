@@ -112,7 +112,7 @@ startup -> SELECT * FROM runs WHERE status IN ('queued','running')
         -> credits already charged are kept, not refunded
 ```
 
-That is what guarantees the real invariant: **any run that is not actively executing is in a
+ **any run that is not actively executing is in a
 terminal state.** Recovered runs are logged by id on startup, and the client recovers the
 same way it recovers from any failure — by starting a new run.
 
