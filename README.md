@@ -447,7 +447,7 @@ clean browser console.
 
 **Stress-checked beyond the test suite**, against a live server:
 
-- **8 genuinely simultaneous POSTs with an identical key** (backgrounded curls, not sequential):
+- **8 simultaneous POSTs with an identical key** (backgrounded curls, not sequential):
   one `201`, seven `200`, a single row in `runs`, 3 credits total. The uniqueness constraint
   holds under real concurrency, not just in a single-threaded test.
 - **`kill -9` mid-run, then restart**: the run was left `running` with 2 credits. Startup
