@@ -1,7 +1,12 @@
-fastapi==0.115.6
-uvicorn==0.34.0
-pydantic==2.10.4
-SQLAlchemy==2.0.36
+# Ranges rather than exact pins, so pip can pick a build that has a prebuilt
+# wheel for whatever Python version you are on. Exact pins from an older date
+# force pip to compile pydantic-core from source on newer Pythons, which needs
+# a Rust toolchain and usually fails.
+fastapi>=0.110,<1.0
+uvicorn>=0.29,<1.0
+pydantic>=2.7,<3.0
+SQLAlchemy>=2.0,<2.1
+
 # testing
-pytest==8.3.4
-httpx==0.28.1
+pytest>=8.0,<9.0
+httpx>=0.27,<1.0

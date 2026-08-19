@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
-from . import run_service
+from . import database, run_service
 from .database import get_session, init_db
 from .schemas import CreateRunRequest, RunResponse
 
@@ -29,8 +29,23 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Create the SQLite tables before the first request is served."""
+    """
+    Startup work, before the first request is served:
+      1. create the SQLite tables if they do not exist
+      2. close out any run that was still executing when the process last died
+    """
     init_db()
+
+    # Looked up through the module (not imported by name) so that rebuilding
+    # the engine - as the persistence test does - is picked up here too.
+    session = database.SessionLocal()
+    try:
+        recovered = run_service.recover_interrupted_runs(session)
+        if recovered:
+            logger.warning("marked %d interrupted run(s) as failed on startup", recovered)
+    finally:
+        session.close()
+
     yield
 
 

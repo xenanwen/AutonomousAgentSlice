@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 from backend import database
 from backend.config import MAX_STEPS
 from backend.main import app
-from backend.models import Run
+from backend.models import Run, Step
 
 from .conftest import new_key, wait_for_terminal
 
@@ -261,6 +261,46 @@ def test_run_survives_an_application_restart(client):
 
     # The idempotency protection survived the restart too.
     assert os.path.exists(os.environ["AGENT_DB_PATH"])
+
+
+def test_interrupted_run_is_closed_out_on_restart(client):
+    """
+    A run that was executing when the process died must not stay 'running'
+    forever - otherwise the browser polls it for eternity.
+
+    We fake the crash by writing a half-finished run straight into SQLite,
+    which is exactly the state a killed process leaves behind.
+    """
+    session = database.SessionLocal()
+    try:
+        session.add(
+            Run(
+                run_id="run_stranded",
+                goal="Research Python",
+                status="running",
+                current_step=2,
+                max_steps=MAX_STEPS,
+                planned_steps=3,
+                credits_used=2,
+            )
+        )
+        session.flush()
+        session.add(Step(run_id="run_stranded", step_number=1, name="planning", status="completed"))
+        session.add(Step(run_id="run_stranded", step_number=2, name="search", status="running"))
+        session.add(Step(run_id="run_stranded", step_number=3, name="summarize", status="pending"))
+        session.commit()
+    finally:
+        session.close()
+
+    # Restart the application: startup sweeps non-terminal runs.
+    with TestClient(app) as restarted:
+        run = restarted.get("/runs/run_stranded").json()
+
+    assert run["status"] == "failed"
+    assert run["error"] == "interrupted"
+    assert run["steps"][1]["status"] == "failed"      # the in-flight step
+    assert run["steps"][0]["status"] == "completed"   # earlier work preserved
+    assert run["credits_used"] == 2                   # attempted work is not refunded
 
 
 def test_idempotency_survives_a_restart(client):

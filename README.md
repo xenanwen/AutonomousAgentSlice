@@ -8,6 +8,11 @@ The model and the tools are **mocked**. The point of this project is reliable ag
 
 ---
 
+Two companion docs live alongside this one:
+
+- **`DECISIONS.md`** — half a page on the four decisions that shaped the design.
+- **`DEMO_GUIDE.md`** — how to demonstrate the three required scenarios, with a spoken transcript.
+
 ## Contents
 
 - [Architecture](#architecture)
@@ -91,7 +96,8 @@ idempotency_records
 ```text
 queued ---> running ---> completed        (the plan finished inside the budget)
                 |
-                +------> failed           (a tool raised, or max_steps_exceeded)
+                +------> failed           (tool_failed | max_steps_exceeded |
+                                           internal_error | interrupted)
 
 completed and failed are TERMINAL.
 A terminal run is never executed again, never mutated, and never charged again.
@@ -283,13 +289,29 @@ Nothing is erased, nothing is refunded, and the run is never marked completed. I
 SQLite so it can be inspected later, and `GET /runs/{run_id}` returns everything the
 frontend needs to explain what happened.
 
-There are exactly two failure reasons, both terminal:
+There are four failure reasons, all terminal:
 
 - `tool_failed: <message>` — a tool raised during a step.
 - `max_steps_exceeded` — the plan did not fit inside the budget.
+- `internal_error` — an unexpected bug in our own code, caught so that it still leaves an
+  accurate record instead of a lie.
+- `interrupted` — the process died while the run was executing (see below).
 
-An unexpected bug in our own code is caught too and recorded as `internal_error`, so a crash
-still leaves an accurate record rather than a run stuck in `running` forever.
+**Crash recovery.** A run is executed by an in-memory worker thread, so killing the server
+mid-run kills the thread with it, and nothing is left to move that run out of `running` — it
+would sit there forever and the frontend would poll it forever. On startup the app therefore
+sweeps every non-terminal run and closes it out:
+
+```text
+startup -> SELECT * FROM runs WHERE status IN ('queued','running')
+        -> the in-flight step becomes failed
+        -> the run becomes failed with error 'interrupted'
+        -> credits already charged are kept, not refunded
+```
+
+That is what guarantees the real invariant: **any run that is not actively executing is in a
+terminal state.** Recovered runs are logged by id on startup, and the client recovers the
+same way it recovers from any failure — by starting a new run.
 
 ### Retry and recovery
 
@@ -370,6 +392,14 @@ a thing I hope happens.
 ## Required walkthrough
 
 All three scenarios below are real output, captured from a running server.
+
+**Reproduce them yourself.** With the server running in one terminal, run this in another:
+
+```bash
+./demo_scenarios.sh                # or: PY=.venv/bin/python ./demo_scenarios.sh
+```
+
+It executes all three scenarios end to end and prints the run state after each.
 
 ### Scenario 1 — a successful run
 
@@ -545,7 +575,7 @@ The run stops immediately at the bound. Credits stop at 5 and never increase aft
 
 ```bash
 python -m pytest tests/ -q
-# 19 passed
+# 20 passed
 ```
 
 The tests drive the real HTTP API and poll for completion exactly the way the browser does,
@@ -559,6 +589,7 @@ so they exercise the production code path rather than calling internals.
 | 4. Idempotency | `test_same_idempotency_key_does_not_duplicate`, `test_replay_while_still_running_does_not_start_a_second_run`, `test_same_key_with_a_different_goal_is_a_conflict` |
 | 5. Different keys → different runs | `test_different_keys_create_separate_runs` |
 | 6. Persistence across a restart | `test_run_survives_an_application_restart`, `test_idempotency_survives_a_restart` |
+| Crash recovery | `test_interrupted_run_is_closed_out_on_restart` |
 | API contract | missing / empty / oversized goal, missing key, unknown run, no stack traces |
 
 `test_run_survives_an_application_restart` disposes the entire connection pool, rebuilds the
@@ -568,6 +599,15 @@ is what proves the state lives on disk and not in the process.
 Verified manually as well, against a live `uvicorn` server driven by a real Chromium browser:
 progress rendering, success rendering, failure rendering, the idempotent replay button, and a
 clean browser console.
+
+**Stress-checked beyond the test suite**, against a live server:
+
+- **8 genuinely simultaneous POSTs with an identical key** (backgrounded curls, not sequential):
+  one `201`, seven `200`, a single row in `runs`, 3 credits total. The uniqueness constraint
+  holds under real concurrency, not just in a single-threaded test.
+- **`kill -9` mid-run, then restart**: the run was left `running` with 2 credits. Startup
+  recovery closed it out as `failed` / `interrupted`, marked the in-flight step failed, kept
+  the earlier completed step and the 2 credits, and logged the recovered run id.
 
 ---
 

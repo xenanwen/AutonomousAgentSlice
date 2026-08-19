@@ -172,6 +172,9 @@ function humanReason(run) {
   if (error.startsWith("tool_failed: ")) {
     return error.slice("tool_failed: ".length);
   }
+  if (error === "interrupted") {
+    return "The server stopped while this run was in progress, so the run was closed out as failed.";
+  }
   return error;
 }
 

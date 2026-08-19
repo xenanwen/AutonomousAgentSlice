@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from . import database
 from .agent.loop import execute_run, prepare_run
 from .config import MAX_STEPS
-from .models import IdempotencyRecord, Run, RunStatus
+from .models import IdempotencyRecord, Run, RunStatus, StepStatus, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +121,50 @@ def start_run(run_id: str) -> None:
     """
     thread = threading.Thread(target=_execute_in_background, args=(run_id,), daemon=True)
     thread.start()
+
+
+def recover_interrupted_runs(session: Session) -> int:
+    """
+    Clean up runs that were mid-flight when the process died.
+
+    A run is executed by an in-memory worker thread. If the server is killed
+    while a run is executing, that thread dies with it and nothing will ever
+    move the run out of 'queued' or 'running' - the run would sit there
+    forever and the browser would poll it forever.
+
+    So on startup we sweep every non-terminal run and close it out as failed
+    with error 'interrupted'. Credits already charged are NOT refunded, for
+    the same reason a failed tool call is not refunded: the work was
+    attempted. This guarantees the invariant that every run which is not
+    actively executing is in a terminal state.
+
+    Returns how many runs were recovered.
+    """
+    stranded = (
+        session.query(Run)
+        .filter(Run.status.in_([RunStatus.QUEUED, RunStatus.RUNNING]))
+        .all()
+    )
+
+    for run in stranded:
+        for step in run.steps:
+            if step.status == StepStatus.RUNNING:
+                step.status = StepStatus.FAILED
+                step.error = "interrupted: the server stopped while this step was running"
+                step.finished_at = utcnow()
+        run.status = RunStatus.FAILED
+        run.error = "interrupted"
+        run.updated_at = utcnow()
+
+    if stranded:
+        session.commit()
+        logger.warning(
+            "recovered %d run(s) that were interrupted by a restart: %s",
+            len(stranded),
+            ", ".join(run.run_id for run in stranded),
+        )
+
+    return len(stranded)
 
 
 def get_run(session: Session, run_id: str):
