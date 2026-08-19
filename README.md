@@ -4,7 +4,7 @@ A minimal but real slice of an autonomous AI agent.
 
 A person gives the agent a goal in plain language. The agent plans the work, executes a short sequence of steps using a mocked tool, tracks progress, and returns a finished result — with exact credit accounting, a hard execution limit, durable state, and safe retries.
 
-The model and the tools are **mocked on purpose**. The point of this project is reliable agent *execution*, not model integration. Mocked tools are also deterministic, which is what makes the test suite reproducible.
+The model and the tools are **mocked**. The point of this project is reliable agent *execution*, not model integration.
 
 ---
 
