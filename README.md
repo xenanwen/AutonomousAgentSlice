@@ -278,7 +278,7 @@ not.
 
 ### Failure semantics
 
-A failed run is **evidence, not garbage**. When a step fails, the system keeps:
+A failed run is **evidence**. When a step fails, the system keeps:
 
 - every earlier completed step and its result,
 - the failed step, with its own error message and timestamps,
@@ -376,16 +376,7 @@ retry, and silently returning the old run would hide it.
 ### Why SQLite
 
 The requirements are: survive a restart, enforce uniqueness atomically, and be trivial to
-run locally. SQLite does all three with zero setup — it is a file. A hosted Postgres would
-add operational complexity without changing a single line of the reliability logic, and the
-SQLAlchemy models would port to it essentially unchanged.
-
-### Why the model and tools are mocked
-
-The assessment explicitly asks for it, and it is the right call anyway: a real LLM or search
-API would make the tests non-deterministic and the failure scenarios unreproducible. With
-mocks, "step 3 fails and 3 credits are consumed" is a fact I can assert in a test rather than
-a thing I hope happens.
+run locally. SQLite does all three in a file.
 
 ---
 
