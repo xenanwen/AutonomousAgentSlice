@@ -1,6 +1,8 @@
 # Decisions
 
-Four things I had to decide while building this, and why I decided them the way I did.
+Things I had to decide while building this, 
+
+spent, and how the person could retry or recover.
 
 ## How I bounded the loop
 
