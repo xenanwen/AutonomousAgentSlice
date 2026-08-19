@@ -603,19 +603,18 @@ kredete-agent-slice/
 
 > I built a working slice of an autonomous agent: you give it a goal in plain language, it
 > plans a sequence of steps, executes them with a tool, and returns a result — with exact
-> credit accounting and safe retries. The model and tools are mocked on purpose, because the
-> interesting engineering here is reliable execution, not model integration, and mocking makes
-> every scenario reproducible in tests.
+> credit accounting and safe retries. The model and tools are mocked. Mocking also makes
+> scenarious reproducible. 
 >
 > The architecture is four layers: FastAPI handles only HTTP, a run service owns the business
 > rules, an agent loop does the work, and SQLite persists everything. The layers don't leak —
-> the agent code has no idea HTTP exists — so I could swap the mocked planner for a real LLM
+> the agent code doesn't know HTTP exists -> I could swap the mocked planner for a real LLM
 > call by changing one file.
 >
 > The agent loop is a bounded `for` loop over a plan the planner produced. For each step it
 > charges the credit, marks the step running, commits, executes the tool, and commits the
 > result. It commits after every state change, which is what lets the browser poll and watch
-> steps light up one at a time — and it means a crash leaves an accurate record instead of a
+> steps light up one at a time, so a failed step leaves an accurate record instead of a
 > lie.
 >
 > Runaway execution is prevented by a hard bound of five steps, enforced in three independent
@@ -624,12 +623,12 @@ kredete-agent-slice/
 > max_steps. If the plan is longer than the budget, the run ends as `max_steps_exceeded` and
 > stops immediately.
 >
-> Partial failure is treated as evidence rather than garbage. If step three's tool raises, the
+> Partial failure is treated as evidence. If step three's tool raises, the
 > completed steps, their results, the failed step's error, and the exact credits already spent
 > all stay in the database. The run is marked failed with a reason; it's never erased and never
 > auto-retried. Retrying means creating a new run, so the failed one stays auditable.
 >
-> Idempotency is the part I'm most careful about. The client sends an `Idempotency-Key` header,
+> Idempotency: The client sends an `Idempotency-Key` header,
 > and I store that key with a uniqueness constraint in SQLite. I deliberately don't do a
 > check-then-insert, because two concurrent retries could both pass the check — instead I
 > attempt the insert inside one transaction with the run itself and catch the integrity error,
