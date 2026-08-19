@@ -57,3 +57,18 @@ frontend, and the crash-recovery sweep above (which only exists *because* execut
 thread that can die). A blocking POST would have been simpler and the response would have matched
 the example in the spec exactly. I still think the polling design is the better one, but it's the
 decision I'd most want a second opinion on.
+
+## AI Note
+
+Overruling:
+
+
+I wrote the design first — the run state machine, the credit policy, and the idempotency contract — and then had the model generate code against that spec, file by file, reviewing each one before moving on. Roughly 3/4 of the final code came out of a model; 100% of it I can explain line by line.
+
+I accepted most of the boilerplate as written: the SQLAlchemy model definitions, the Pydantic request schemas, the FastAPI error handlers, and the first draft of the test suite. These are well-trodden patterns, the model's version matched what I'd have written, and I did not rewrite them by hand as it would have bought me nothing. I did read every line.
+
+I overrode it in two places. First, its initial version executed the agent inside the POST handler and returned the finished run. That's simpler, but it makes progress invisible to the client, so I moved execution to a background worker and had the frontend poll — accepting the extra complexity of a per-thread database session because watching steps appear was an explicit requirement. 
+
+Second, it suggested caching results by goal text so identical goals would return the same run. Basically, AI asked me to make the same goal always return the same run_id, but I recognized that was not what the prompt was asking and pushed back because the the assessment requires the opposite. I rejected that: idempotency is about identifying a repeated request, not a repeated string, and only the client knows which it is. (requesting again because it didn't originally output and prompting the same text at a different time are different) That's why the key comes from a header.
+
+The thing it got wrong that I caught: its idempotency check was if key not in db: create_run(). That reads fine and passes a sequential test, but two concurrent retries can both evaluate the condition before either writes, so both create a run and the client gets charged twice. I rewrote it to insert the run and the idempotency record in one transaction and catch the IntegrityError from the unique constraint, letting the database do the locking. 
